@@ -1,0 +1,4 @@
+{
+    "namespace": "multitasking",
+    "setup": "setup.mjs"
+}
