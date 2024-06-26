@@ -1,12 +1,16 @@
-<template id="multitasking-page-component">
-  <div class="content d-none" id="multitasking-container">
-    <div class="row row-deck gutters-tiny">
-      <div class="col-12">
-        <div id="page" class="block block-rounded border-top border-success border-4x p-3">
-          <div id="container" class="row no-gutters">
-          </div>
+<template id="multitasking-action-group-template">
+  <div class="block-content bg-combat-dark">
+    <h5 class="col-12 font-w700 text-combat-smoke text-left m-0 mt-2 pl-0" id="name"></h5>
+    <div class="row" id="actions-container"></div>
+  </div>
+</template>
+
+<template id="multitasking-action-template">
+  <div class="block block-rounded-double bg-combat-inner-dark text-center m-2">
+    <div class="row no-gutters">
+        <div class="col-12">
+            <img class="skill-icon-xs m-2" id="icon"></img>
         </div>
-      </div>
     </div>
   </div>
 </template>

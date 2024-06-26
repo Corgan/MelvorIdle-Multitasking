@@ -1,5 +1,86 @@
-export async function setup({ loadTemplates, gameData, loadModule, loadScript, onInterfaceAvailable, onModsLoaded, onCharacterLoaded, onInterfaceReady, patch }) {
+export async function setup({ namespace, loadTemplates, gameData, loadModule, loadScript, onInterfaceAvailable, onModsLoaded, onCharacterLoaded, onInterfaceReady, patch, settings }) {
   await loadTemplates("templates.html"); // Add templates
+
+  const { MultitaskingActionGroupElement } = await loadModule('src/components/multitasking-action-group.mjs');
+  const { MultitaskingActionElement } = await loadModule('src/components/multitasking-action.mjs');
+
+  settings.type('action-groups', {
+    render: function(name, onChange, config) {
+      const root = document.createElement('div');
+      root.id = name;
+    
+      return root;
+    },
+    get: function(root) {
+      console.log('get', root);
+      let groups = {};
+      groups.default = [];
+      groups.test = [];
+      return groups;
+    },
+    set: function(root, data) {
+      const actions = game.multitasking.validActions;
+      let groupedActions = Object.values(data).flat();
+      let ungroupedActions = actions.filter(action => !groupedActions.includes(action));
+      data.default.push(...ungroupedActions);
+      
+      let groupElements = [...root.querySelectorAll('multitasking-action-group')];
+      let newGroupElements = [];
+      Object.entries(data).forEach(([groupID, groupActions]) => {
+        let groupElement = groupElements.find(group => group.id === `${namespace}:${groupID}`);
+        if(groupElement === undefined) {
+          groupElement = document.createElement('multitasking-action-group');
+          groupElement.id = `${namespace}:${groupID}`;
+          
+          const tabSortable = new Sortable(groupElement.container, {
+            group: {
+                name: 'multitask-action-group',
+                pull: true,
+                put: true
+            },
+            draggable: 'multitasking-action',
+            onAdd: (event) => {
+                if (event.newIndex === undefined || event.oldIndex === undefined)
+                    return;
+                console.log(event.item);
+                //itemContainer.append(event.item);
+                //bank.moveItemToNewTab(this.getFromTabID(event.from), tabID, event.oldIndex);
+                //this.validateItemOrder();
+                //tabLink.classList.remove('bg-combat-menu-selected');
+            }
+          });
+        }
+        groupElement.name.textContent = groupID;
+        let actionElements = [...groupElement.container.children];
+        let newActions = groupActions.map((action, i) => {
+          let actionElement = actionElements[i];
+          if(actionElement === undefined)
+            actionElement = createElement('multitasking-action');
+          actionElement.setAttribute('action', action);
+          return actionElement;
+        });
+        
+        groupElement.container.replaceChildren(...newActions);
+        newGroupElements.push(groupElement);
+      });
+
+      root.replaceChildren(...newGroupElements);
+
+
+
+
+      console.log('set', root, data, actions);
+    }
+  });
+  settings.section('Action Groups').add([
+    {
+      type: 'action-groups',
+      name: 'groups',
+      onChange: function(value, previousValue) {
+          console.log('onChange', value, previousValue);
+      }
+    }
+  ]);
   
   const { Multitasking } = await loadModule('src/multitasking.mjs');
 
@@ -124,5 +205,10 @@ export async function setup({ loadTemplates, gameData, loadModule, loadScript, o
           multitasking.addAction(action);
       });
     });
+  });
+
+  onCharacterLoaded(() => {
+    game.multitasking.loadActions();
+    game.multitasking.loadGroups();
   });
 }

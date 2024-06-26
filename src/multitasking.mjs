@@ -7,6 +7,25 @@ class Multitasking extends NamespacedObject {
         this.game = game;
         this.actions = new Set();
         this.isActive = true;
+        this.groups = {
+            default: []
+        };
+        this.validActions = [];
+        this.invalidActions = ['melvorD:GolbinRaid'];
+    }
+
+    loadActions() {
+        this.validActions = game.activeActions.allObjects.filter(action => !this.invalidActions.includes(action.id)).map(action => action.id);
+    }
+
+    saveGroups() {
+        this.groups = settings.section('Action Groups').get('groups');
+        characterStorage.setItem('groups', this.groups);
+    }
+
+    loadGroups() {
+        let groups = characterStorage.getItem('groups');
+        settings.section('Action Groups').set('groups', this.groups);
     }
 
     get name() {
