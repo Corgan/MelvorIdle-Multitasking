@@ -4,81 +4,105 @@ export async function setup({ namespace, loadTemplates, gameData, loadModule, lo
   const { MultitaskingActionGroupElement } = await loadModule('src/components/multitasking-action-group.mjs');
   const { MultitaskingActionElement } = await loadModule('src/components/multitasking-action.mjs');
 
+  /*
+  */
   settings.type('action-groups', {
     render: function(name, onChange, config) {
       const root = document.createElement('div');
       root.id = name;
+
+      root._onchange = onChange;
     
       return root;
     },
     get: function(root) {
-      console.log('get', root);
+      let groupElements = [...root.querySelectorAll('multitasking-action-group')];
       let groups = {};
-      groups.default = [];
-      groups.test = [];
+
+      groupElements.forEach(groupElement => {
+        let [ groupNamespace, groupID ] = groupElement.id.split(':');
+        let count = groupElement.count;
+
+        let actionElements = [...groupElement.container.querySelectorAll('multitasking-action')];
+        let actions = actionElements.map(actionElement => actionElement.getAttribute('action'));
+
+        groups[groupID] = { count, actions };
+      });
+
+      if(groups.default === undefined) {
+        groups.default = { count: 0, actions: [] };
+      }
+
       return groups;
     },
     set: function(root, data) {
       const actions = game.multitasking.validActions;
-      let groupedActions = Object.values(data).flat();
+      if(data === null|| data === undefined || data.default === undefined) {
+        data = { default: { count: 0, actions: [...actions] } };
+      }
+      let groupedActions = Object.values(data).flatMap(group => group.actions);
       let ungroupedActions = actions.filter(action => !groupedActions.includes(action));
-      data.default.push(...ungroupedActions);
-      
+      data.default.actions.push(...ungroupedActions);
+
       let groupElements = [...root.querySelectorAll('multitasking-action-group')];
       let newGroupElements = [];
-      Object.entries(data).forEach(([groupID, groupActions]) => {
+      Object.entries(data).forEach(([groupID, groupData]) => {
         let groupElement = groupElements.find(group => group.id === `${namespace}:${groupID}`);
         if(groupElement === undefined) {
           groupElement = document.createElement('multitasking-action-group');
           groupElement.id = `${namespace}:${groupID}`;
-          
-          const tabSortable = new Sortable(groupElement.container, {
-            group: {
-                name: 'multitask-action-group',
-                pull: true,
-                put: true
-            },
-            draggable: 'multitasking-action',
-            onAdd: (event) => {
-                if (event.newIndex === undefined || event.oldIndex === undefined)
-                    return;
-                console.log(event.item);
-                //itemContainer.append(event.item);
-                //bank.moveItemToNewTab(this.getFromTabID(event.from), tabID, event.oldIndex);
-                //this.validateItemOrder();
-                //tabLink.classList.remove('bg-combat-menu-selected');
-            }
-          });
+          groupElement._onchange = root._onchange;
+          groupElement.remove.classList.toggle('d-none', groupID === 'default');
         }
+
         groupElement.name.textContent = groupID;
+        groupElement.count = groupData.count;
+        
         let actionElements = [...groupElement.container.children];
-        let newActions = groupActions.map((action, i) => {
+
+        let newActions = groupData.actions.map((action, i) => {
           let actionElement = actionElements[i];
           if(actionElement === undefined)
             actionElement = createElement('multitasking-action');
+
           actionElement.setAttribute('action', action);
           return actionElement;
         });
-        
+      
         groupElement.container.replaceChildren(...newActions);
+
         newGroupElements.push(groupElement);
       });
 
       root.replaceChildren(...newGroupElements);
-
-
-
-
-      console.log('set', root, data, actions);
     }
+  });
+  settings.type('button-callback', {
+      render: function(name, onChange, config) {
+          const button = createElement('button', {
+              id: name,
+              classList: ['btn', 'btn-success', 'font-size-sm'],
+              children: [config.text]
+          });
+          button.onclick = () => game.multitasking.addNewGroup();
+          return button;
+      },
+      get: function(root) {},
+      set: function(root, data) {
+      }
   });
   settings.section('Action Groups').add([
     {
       type: 'action-groups',
       name: 'groups',
       onChange: function(value, previousValue) {
-          console.log('onChange', value, previousValue);
+          game.multitasking.setGroups(value);
       }
+    },
+    {
+      type: 'button-callback',
+      name: 'add-new',
+      text: 'Add New Group'
     }
   ]);
   
@@ -92,14 +116,20 @@ export async function setup({ namespace, loadTemplates, gameData, loadModule, lo
 
   await gameData.addPackage('data.json'); // Add skill data (page + sidebar, skillData)
 
+  let thievingOverride = true;
+
   onModsLoaded(() => {
     patch(Thieving, 'resetActionState').replace(function(o) {
-      if(this.isActive && !multitasking.actions.has(this))
+      if(this.isActive && !thievingOverride)
         o();
     });
 
+    patch(Game, 'onLoad').after(function() {
+      thievingOverride = false;
+    });
+
     patch(Game, 'idleChecker').replace(function(o, skill) {
-      if (this.activeAction === multitasking) {
+      if(this.activeAction === multitasking) {
           return false;
       }
       return o(skill);
@@ -107,7 +137,7 @@ export async function setup({ namespace, loadTemplates, gameData, loadModule, lo
 
     patch(Game, 'clearActiveAction').replace(function(o, save=true) {
       if (!this.disableClearOffline) {
-          this.activeAction = multitasking;
+          this.activeAction = multitasking.hasActive ? multitasking : undefined;
           if (save)
               this.scheduleSave();
           deleteScheduledPushNotification('offlineSkill');
@@ -121,7 +151,7 @@ export async function setup({ namespace, loadTemplates, gameData, loadModule, lo
     });
     patchedRenderGameTitle.after(function() {
       if(shouldRenderGameTitle) {
-        if(this.activeAction === multitasking && (multitasking.actions.has(this.combat) || multitasking.actions.has(this.thieving))){
+        if(this.activeAction === multitasking && (multitasking.hasAction(this.combat) || multitasking.hasAction(this.thieving))){
           $('title').text(`${getLangString('SKILL_NAME_Hitpoints')} ${numberWithCommas(this.combat.player.hitpoints)}`);
         }
         shouldRenderGameTitle = false
@@ -137,7 +167,7 @@ export async function setup({ namespace, loadTemplates, gameData, loadModule, lo
     patchedRenderCombatMinibar.after(function() {
       if(shouldRenderCombatMinibar) {
         const minibar = document.getElementById('combat-footer-minibar');
-        if(this.activeAction === multitasking && (multitasking.actions.has(this.combat))) {
+        if(this.activeAction === multitasking && (multitasking.hasAction(this.combat))) {
           showElement(minibar);
         } else {
           hideElement(minibar);
@@ -147,13 +177,16 @@ export async function setup({ namespace, loadTemplates, gameData, loadModule, lo
 
     patch(BaseManager, 'checkDeath').before(function() {
       const playerDied = this.player.hitpoints <= 0;
-      if(playerDied && multitasking.actions.has(this.game.thieving))
+      if(playerDied && multitasking.hasAction(this.game.thieving))
         this.game.thieving.stopOnDeath();
     });
 
     patch(CombatManager, 'onSelection').after(function() {
-      multitasking.addAction(this);
-      this.game.activeAction = multitasking;
+      let added = multitasking.addAction(this);
+      if(!added)
+        this.stop();
+      if(multitasking.hasActive)
+        this.game.activeAction = multitasking;
     });
 
     patch(CombatManager, 'stop').after(function(stopped) {
@@ -167,8 +200,11 @@ export async function setup({ namespace, loadTemplates, gameData, loadModule, lo
         if(action.start !== undefined) {
           patch(action.constructor, 'start').after(function(started) {
             if(started) {
-              multitasking.addAction(this);
-              this.game.activeAction = multitasking;
+              let added = multitasking.addAction(this);
+              if(!added)
+                this.stop();
+              if(multitasking.hasActive)
+                this.game.activeAction = multitasking;
             }
             return started;
           });
@@ -178,8 +214,11 @@ export async function setup({ namespace, loadTemplates, gameData, loadModule, lo
             startActions.forEach(startAction => {
               patch(action.constructor, startAction).after(function(started) {
                 if(started) {
-                  multitasking.addAction(this);
-                  this.game.activeAction = multitasking;
+                  let added = multitasking.addAction(this);
+                  if(!added)
+                    this.stop();
+                  if(multitasking.hasActive)
+                    this.game.activeAction = multitasking;
                 }
                 return started;
               });
@@ -198,17 +237,21 @@ export async function setup({ namespace, loadTemplates, gameData, loadModule, lo
     patch(RaidManager, 'preStartRaid').replace(function() {
       return;
     });
-
-    patch(Game, 'onLoad').before(function() {
-      this.activeActions.forEach(action => {
-        if(action.isActive && action !== multitasking)
-          multitasking.addAction(action);
-      });
-    });
   });
 
   onCharacterLoaded(() => {
+    console.log('onCharacterLoaded');
     game.multitasking.loadActions();
     game.multitasking.loadGroups();
+    game.activeActions.forEach(action => {
+      if(action.isActive && action !== multitasking) {
+        let added = multitasking.addAction(action);
+        if(!added)
+          action.stop();
+      }
+    });
+    if(game.activeAction === multitasking && !multitasking.hasActive) {
+      game.activeAction = undefined;
+    }
   });
 }
