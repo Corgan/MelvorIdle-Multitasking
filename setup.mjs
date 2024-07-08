@@ -114,7 +114,7 @@ export async function setup({ namespace, loadTemplates, gameData, loadModule, lo
   game.actions.registerObject(multitasking);
   game.activeActions.registerObject(multitasking);
 
-  await gameData.addPackage('data.json'); // Add skill data (page + sidebar, skillData)
+  await gameData.addPackage('data/data.json'); // Add skill data (page + sidebar, skillData)
 
   let thievingOverride = true;
 
