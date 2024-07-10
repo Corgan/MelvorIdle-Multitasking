@@ -1,4 +1,4 @@
-export async function setup({ namespace, loadTemplates, gameData, loadModule, loadScript, onInterfaceAvailable, onModsLoaded, onCharacterLoaded, onInterfaceReady, patch, settings }) {
+export async function setup({ namespace, loadTemplates, gameData, loadModule, loadScript, onModsLoaded, onInterfaceAvailable, onCharacterLoaded, onInterfaceReady, patch, settings }) {
   await loadTemplates("templates.html"); // Add templates
 
   const { MultitaskingActionGroupElement } = await loadModule('src/components/multitasking-action-group.mjs');
