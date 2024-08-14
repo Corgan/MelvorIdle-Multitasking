@@ -95,6 +95,9 @@ class Multitasking extends NamespacedObject {
         let actionGroup = this.actionGroupFromGroupKey(groupKey);
         if((actionGroup.size < group.count || group.count === 0) || actionGroup.has(action)) {
             actionGroup.add(action);
+            this._actions = undefined;
+            this._activeSkills = undefined;
+            this._hasActive = undefined;
             return true;
         }
         notifyPlayer(this, `Could not start ${action.name}. There are ${actionGroup.size} tasks running in ${groupKey}.`, 'danger');
@@ -105,6 +108,9 @@ class Multitasking extends NamespacedObject {
         let groupKey = this.groupKeyFromAction(action);
         let actionGroup = this.actionGroupFromGroupKey(groupKey);
         actionGroup.delete(action);
+        this._actions = undefined;
+        this._activeSkills = undefined;
+        this._hasActive = undefined;
     }
 
     hasAction(action) {
@@ -112,15 +118,21 @@ class Multitasking extends NamespacedObject {
     }
 
     get actions() {
-        return [...this.actionGroups.values()].flatMap(actions => [...actions.values()]);
+        if(this._actions === undefined)
+            this._actions = [...this.actionGroups.values()].flatMap(actions => [...actions.values()]);
+        return this._actions;
     }
 
     get activeSkills() {
-        return [...this.actions].flatMap(action => action.activeSkills);
+        if(this._activeSkills === undefined)
+            this._activeSkills = [...this.actions].flatMap(action => action.activeSkills);
+        return this._activeSkills;
     }
 
     get hasActive() {
-        return this.actions.length > 0 && this.actions.some(action => action.isActive);
+        if(this._hasActive === undefined)
+            this._hasActive = this.actions.length > 0 && this.actions.some(action => action.isActive);
+        return this._hasActive;
     }
 
     start() {
